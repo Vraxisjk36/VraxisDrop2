@@ -15,8 +15,20 @@ Deno.serve(async req => {
   if(req.method!=="POST") return json({error:"Method not allowed"},405);
   if(!corsOrigin || origin!==corsOrigin) return json({error:"Origin not allowed"},403);
   try {
+    // Bound request bodies and rate-limit before handling storage or database claims.
+    const length=Number(req.headers.get("content-length")||0);
+    if(length>11*1024*1024)return json({error:"Request exceeds the 10 MB file limit"},413);
     const form=await req.formData();
     const action=String(form.get("action")||"");
+    if(action!=="send"&&action!=="pickup")return json({error:"Unknown action"},400);
+    const ip=req.headers.get("cf-connecting-ip")||req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()||"unknown";
+    const {data:allowed,error:rateError}=await supabase.rpc("connect_consume_limit",{
+      p_key:await hash("quickdrop:"+action+":"+ip),
+      p_max:action==="send"?6:30,
+      p_seconds:3600
+    });
+    if(rateError){console.error("Quick Drop rate limit failed",rateError);return json({error:"Transfer temporarily unavailable"},503);}
+    if(!allowed)return json({error:"Hourly limit reached. Please try again later."},429);
     if(action==="send") {
       const content=String(form.get("content")||"").trim();
       const file=form.get("file");
