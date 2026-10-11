@@ -21,11 +21,11 @@ Deno.serve(async req=>{
   if(rateError)throw rateError;if(!allowed)return reply({error:"Too many requests. Please wait a minute."},429);
  }
  if(action==="create"){
-  const host=secret(),invite=secret(),code=random(8);
+  const host=secret(),invite=secret(),code=random(8),signalKey=secret();
   // Opportunistic cleanup; room and signal rows remain private to the service role.
   await db.from("connect_signals").delete().lt("created_at",new Date(Date.now()-3600000).toISOString());
-  const {data,error}=await db.from("connect_rooms").insert({host_hash:await hash(host),invite_hash:await hash(invite),code_hash:await hash(code)}).select("id,expires_at").single();
-  if(error)throw error;return reply({room_id:data.id,host_token:host,invite,code,expires_at:data.expires_at});
+  const {data,error}=await db.from("connect_rooms").insert({host_hash:await hash(host),invite_hash:await hash(invite),code_hash:await hash(code),signal_key:signalKey}).select("id,expires_at").single();
+  if(error)throw error;return reply({room_id:data.id,host_token:host,invite,code,signal_key:signalKey,expires_at:data.expires_at});
  }
  if(action==="join"){
   const invite=String(body.invite||"");const code=String(body.code||"").toUpperCase().replace(/\s/g,"");
@@ -76,8 +76,8 @@ Deno.serve(async req=>{
  if(action==="guest_status"){
   const guest=String(body.guest_token||"");const {data:request}=await db.from("connect_join_requests").select("status,room_id").eq("id",String(body.request_id||"")).eq("guest_hash",await hash(guest)).maybeSingle();
   if(!request)return reply({error:"Unauthorized request"},403);
-  const {data:room}=await db.from("connect_rooms").select("expires_at,closed_at").eq("id",request.room_id).single();
-  return reply({status:room?.closed_at||new Date(room?.expires_at||0)<new Date()?"expired":request.status});
+  const {data:room}=await db.from("connect_rooms").select("expires_at,closed_at,signal_key").eq("id",request.room_id).single();
+  const status=room?.closed_at||new Date(room?.expires_at||0)<new Date()?"expired":request.status;return reply({status,...(status==="approved"?{signal_key:room?.signal_key}: {})});
  }
  return reply({error:"Unknown action"},400);
  }catch(e){console.error("connect failure",e);return reply({error:"Unable to complete request"},500)}
