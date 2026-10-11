@@ -14,8 +14,8 @@ Deno.serve(async req=>{
  try{
  const raw=await req.text();if(raw.length>26000)return reply({error:"Request too large"},413);const body=JSON.parse(raw);const action=body.action;
  const ip=req.headers.get("cf-connecting-ip")||req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()||"unknown";
- if(["create","join","signal_send","signal_poll"].includes(action)){
-  const limit=action==="create"?12:action==="join"?24:action==="signal_send"?120:240;
+ if(["create","join","signal_send","signal_poll","turn_credentials"].includes(action)){
+  const limit=action==="create"?12:action==="join"?24:action==="signal_send"?120:action==="turn_credentials"?8:240;
   const key=await hash(ip+":"+action);
   const {data:allowed,error:rateError}=await db.rpc("connect_consume_limit",{p_key:key,p_max:limit,p_seconds:60});
   if(rateError)throw rateError;if(!allowed)return reply({error:"Too many requests. Please wait a minute."},429);
@@ -72,6 +72,32 @@ Deno.serve(async req=>{
   const after=Math.max(0,Math.floor(Number(body.after)||0));
   const {data,error}=await db.from("connect_signals").select("id,payload").eq("room_id",roomId).neq("sender",role).gt("id",after).order("id",{ascending:true}).limit(100);
   if(error)throw error;return reply({messages:data||[]});
+ }
+ if(action==="turn_credentials"){
+  const role=body.role==="host"?"host":body.role==="guest"?"guest":null;
+  const roomId=String(body.room_id||""),token=String(body.token||"");
+  if(!role||!/^[-0-9a-f]{36}$/i.test(roomId)||token.length<40||token.length>120)return reply({error:"Invalid session"},400);
+  const {data:room}=await db.from("connect_rooms").select("id,host_hash,closed_at,expires_at").eq("id",roomId).maybeSingle();
+  if(!room||room.closed_at||new Date(room.expires_at)<=new Date())return reply({error:"Room expired"},403);
+  const {data:approved}=await db.from("connect_join_requests").select("id").eq("room_id",roomId).eq("status","approved").limit(1);
+  if(!approved?.length)return reply({error:"Waiting for device approval"},403);
+  if(role==="host"){
+    if(room.host_hash!==await hash(token))return reply({error:"Unauthorized"},403);
+  }else{
+    const {data:guest}=await db.from("connect_join_requests").select("id").eq("room_id",roomId).eq("guest_hash",await hash(token)).eq("status","approved").maybeSingle();
+    if(!guest)return reply({error:"Unauthorized"},403);
+  }
+  const turnId=Deno.env.get("CLOUDFLARE_TURN_KEY_ID");
+  const turnSecret=Deno.env.get("CLOUDFLARE_TURN_KEY_SECRET");
+  if(!turnId||!turnSecret)return reply({iceServers:[{urls:"stun:stun.l.google.com:19302"}],relay_available:false});
+  const res=await fetch("https://rtc.live.cloudflare.com/v1/turn/keys/"+encodeURIComponent(turnId)+"/credentials/generate-ice-servers",{
+    method:"POST",headers:{"Authorization":"Bearer "+turnSecret,"Content-Type":"application/json"},
+    body:JSON.stringify({ttl:3600})
+  });
+  if(!res.ok){console.error("TURN provider failed",res.status);return reply({iceServers:[{urls:"stun:stun.l.google.com:19302"}],relay_available:false})}
+  const data=await res.json();
+  if(!Array.isArray(data.iceServers))return reply({error:"Invalid relay configuration"},502);
+  return reply({iceServers:data.iceServers,relay_available:true});
  }
  if(action==="guest_status"){
   const guest=String(body.guest_token||"");const {data:request}=await db.from("connect_join_requests").select("status,room_id").eq("id",String(body.request_id||"")).eq("guest_hash",await hash(guest)).maybeSingle();
