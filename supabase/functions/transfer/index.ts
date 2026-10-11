@@ -44,7 +44,9 @@ Deno.serve(async req => {
       const {data:blob,error:downloadError}=await supabase.storage.from("vraxis-drops").download(drop.storage_path);
       if(downloadError||!blob) return json({error:"File unavailable"},410);
       await supabase.storage.from("vraxis-drops").remove([drop.storage_path]);
-      return json({kind:"file",filename:drop.file_name,base64:btoa(String.fromCharCode(...new Uint8Array(await blob.arrayBuffer())))});
+      const bytes=new Uint8Array(await blob.arrayBuffer());
+      let binary=""; for(let i=0;i<bytes.length;i+=8192) binary+=String.fromCharCode(...bytes.subarray(i,i+8192));
+      return json({kind:"file",filename:drop.file_name,base64:btoa(binary)});
     }
     return json({error:"Unknown action"},400);
   }catch{return json({error:"Request failed"},500);}
