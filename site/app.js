@@ -4,7 +4,7 @@ const E2EE_FILE="vraxis-encrypted-v1.bin";
 const enc=new TextEncoder(),dec=new TextDecoder();
 function toB64(bytes){let out="";for(let i=0;i<bytes.length;i+=8192)out+=String.fromCharCode(...bytes.subarray(i,i+8192));return btoa(out)}
 function fromB64(s){return Uint8Array.from(atob(s),c=>c.charCodeAt(0))}
-function b64url(bytes){return toB64(bytes).replace(/\\+/g,"-").replace(/\\//g,"_").replace(/=+$/,"")}
+function b64url(bytes){return toB64(bytes).split("+").join("-").split("/").join("_").replace(/=+$/,"")}
 function unb64url(s){return fromB64(s.replace(/-/g,"+").replace(/_/g,"/"))}
 async function encryptDrop(plaintext,keyBytes){
  const iv=crypto.getRandomValues(new Uint8Array(12));
