@@ -2,7 +2,7 @@
 // Configure TRANSFER_ORIGIN to the GitHub Pages origin. Keep service-role key server-side.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
-const corsOrigin = Deno.env.get("TRANSFER_ORIGIN") || "";
+const corsOrigin = Deno.env.get("TRANSFER_ORIGIN") || "https://vraxisjk36.github.io";
 const supabase = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!);
 const encoder = new TextEncoder();
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), {status, headers: {"content-type":"application/json", "access-control-allow-origin":corsOrigin, "vary":"Origin", "cache-control":"no-store"}});
