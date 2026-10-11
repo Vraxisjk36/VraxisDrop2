@@ -58,11 +58,13 @@ if(send)send.addEventListener("submit",async event=>{
   const button=send.querySelector("button[type=submit]");button.disabled=true;feedback.textContent="Creating your drop…";
   try{
     const data=new FormData(send);data.set("action","send");
+    const privateMode=document.getElementById("private-mode")?.checked===true;
     const file=data.get("file");const isFile=file instanceof File&&file.size>0;
-    if(isFile&&file.size>9*1048576)throw Error("Encrypted files must be smaller than 9 MB.");
-    if(!isFile&&enc.encode(String(data.get("content")||"")).length>65000)throw Error("Encrypted messages must be under 65 KB.");
-    const keyBytes=crypto.getRandomValues(new Uint8Array(32));
-    if(isFile){
+    if(!privateMode&&isFile&&file.size>10*1048576)throw Error("File exceeds 10 MB.");
+    if(privateMode&&isFile&&file.size>9*1048576)throw Error("Encrypted files must be smaller than 9 MB.");
+    if(privateMode&&!isFile&&enc.encode(String(data.get("content")||"")).length>65000)throw Error("Encrypted messages must be under 65 KB.");
+    const keyBytes=privateMode?crypto.getRandomValues(new Uint8Array(32)):null;
+    if(privateMode&&isFile){
       const nameBytes=enc.encode(file.name);
       if(nameBytes.length>1024)throw Error("File name is too long.");
       const bytes=new Uint8Array(await file.arrayBuffer());
@@ -72,7 +74,7 @@ if(send)send.addEventListener("submit",async event=>{
       const cipher=await encryptDrop(plain,keyBytes);
       data.set("file",new File([cipher],E2EE_FILE,{type:"application/octet-stream"}));
       data.set("content","");
-    }else{
+    }else if(privateMode){
       const content=String(data.get("content")||"").trim();
       if(!content)throw Error("Enter a message or select a file.");
       const cipher=await encryptDrop(enc.encode(content),keyBytes);
@@ -82,8 +84,8 @@ if(send)send.addEventListener("submit",async event=>{
     }
     const result=await transfer(data);
     const url=new URL("retrieve.html",location.href);url.searchParams.set("code",result.code);
-    url.hash="key="+b64url(keyBytes);
-    send.innerHTML='<div class="success-box"><div class="eyebrow" style="justify-content:center">Drop created</div><h3 class="panel-title" style="margin-top:25px">Ready to <em>go.</em></h3><p class="hint">Your one-time pickup code</p><div class="big-code" id="new-code"></div><p class="hint">End-to-end encrypted. Share the complete link: the eight-character code alone cannot decrypt this drop. Expires in '+result.expires_hours+' hour(s) or after the first retrieval.</p><input class="input" id="pickup-link" readonly aria-label="Pickup link"><button class="btn ember full" type="button" id="copy-link">Copy pickup link ↗</button><a class="btn ghost full" href="./#drop" style="margin-top:10px">Create another drop</a></div>';
+    if(privateMode)url.hash="key="+b64url(keyBytes);
+    send.innerHTML='<div class="success-box"><div class="eyebrow" style="justify-content:center">Drop created</div><h3 class="panel-title" style="margin-top:25px">Ready to <em>go.</em></h3><p class="hint">Your one-time pickup code</p><div class="big-code" id="new-code"></div><p class="hint">Standard mode: the eight-character code works on its own. Private mode requires the complete link. Expires in '+result.expires_hours+' hour(s) or after the first retrieval.</p><input class="input" id="pickup-link" readonly aria-label="Pickup link"><button class="btn ember full" type="button" id="copy-link">Copy pickup link ↗</button><a class="btn ghost full" href="./#drop" style="margin-top:10px">Create another drop</a></div>';
     send.querySelector("#new-code").textContent=result.code;
     send.querySelector("#pickup-link").value=url.href;
     send.querySelector("#copy-link").addEventListener("click",async()=>{
@@ -107,8 +109,7 @@ if(pickup){
         location.hash="key="+b64url(key);
       }
       const urlKey=getLinkKey();
-      if(!urlKey&&!document.getElementById("legacy-drop")?.checked)
-        throw Error("Enter the encryption key or open the full pickup link. The code has not been used.");
+
       const data=new FormData(pickup);data.set("action","pickup");
       const result=await transfer(data);
       const keyBytes=getLinkKey();
