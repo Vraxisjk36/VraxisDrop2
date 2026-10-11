@@ -33,6 +33,8 @@ function saveFile(bytes,name){
 
 const endpoint=window.VRAXIS_TRANSFER_ENDPOINT;
 const feedback=document.getElementById("feedback");
+function setStatus(text,state="progress"){if(feedback){feedback.textContent=text;feedback.dataset.state=state;}}
+function copyText(text){return navigator.clipboard.writeText(text)}
 async function transfer(data){
   if(!endpoint)throw Error("Transfer service is not configured.");
   const response=await fetch(endpoint,{method:"POST",body:data});
@@ -55,7 +57,7 @@ if(fileInput){fileInput.addEventListener("change",updateFile);if(fileZone){
 const send=document.getElementById("send");
 if(send)send.addEventListener("submit",async event=>{
   event.preventDefault();
-  const button=send.querySelector("button[type=submit]");button.disabled=true;feedback.textContent="Creating your drop…";
+  const button=send.querySelector("button[type=submit]");button.disabled=true;setStatus("Creating your drop…");
   try{
     const data=new FormData(send);data.set("action","send");
     const privateMode=document.getElementById("private-mode")?.checked===true;
@@ -85,21 +87,22 @@ if(send)send.addEventListener("submit",async event=>{
     const result=await transfer(data);
     const url=new URL("retrieve.html",location.href);url.searchParams.set("code",result.code);
     if(privateMode)url.hash="key="+b64url(keyBytes);
-    send.innerHTML='<div class="success-box"><div class="eyebrow" style="justify-content:center">Drop created</div><h3 class="panel-title" style="margin-top:25px">Ready to <em>go.</em></h3><p class="hint">Your one-time pickup code</p><div class="big-code" id="new-code"></div><p class="hint">Standard mode: the eight-character code works on its own. Private mode requires the complete link. Expires in '+result.expires_hours+' hour(s) or after the first retrieval.</p><input class="input" id="pickup-link" readonly aria-label="Pickup link"><button class="btn ember full" type="button" id="copy-link">Copy pickup link ↗</button><a class="btn ghost full" href="./#drop" style="margin-top:10px">Create another drop</a></div>';
+    send.innerHTML='<div class="success-box"><div class="eyebrow" style="justify-content:center">Drop created</div><h3 class="panel-title" style="margin-top:25px">Ready to <em>go.</em></h3><p class="hint">Your one-time pickup code</p><div class="big-code" id="new-code"></div><button class="btn ghost full" type="button" id="copy-code">Copy pickup code ↗</button><p class="hint">Standard mode: the eight-character code works on its own. Private mode requires the complete link. Expires in '+result.expires_hours+' hour(s) or after the first retrieval.</p><input class="input" id="pickup-link" readonly aria-label="Pickup link"><button class="btn ember full" type="button" id="copy-link">Copy pickup link ↗</button><a class="btn ghost full" href="./#drop" style="margin-top:10px">Create another drop</a></div>';
     send.querySelector("#new-code").textContent=result.code;
+    send.querySelector("#copy-code").addEventListener("click",async()=>{try{await copyText(result.code);send.querySelector("#copy-code").textContent="Code copied ✓"}catch{send.querySelector("#copy-code").textContent="Select the code above to copy"}});
     send.querySelector("#pickup-link").value=url.href;
     send.querySelector("#copy-link").addEventListener("click",async()=>{
       try{await navigator.clipboard.writeText(url.href);send.querySelector("#copy-link").textContent="Link copied ✓"}
       catch{send.querySelector("#pickup-link").select();send.querySelector("#copy-link").textContent="Select and copy the link above";}
     });
-  }catch(e){feedback.textContent=e.message;button.disabled=false;}
+  }catch(e){setStatus(e.message,"error");button.disabled=false;}
 });
 const pickup=document.getElementById("pickup");
 if(pickup){
   const param=new URLSearchParams(location.search).get("code");if(param)document.getElementById("code").value=param;
   pickup.addEventListener("submit",async event=>{
     event.preventDefault();
-    const button=pickup.querySelector("button[type=submit]");button.disabled=true;feedback.textContent="Retrieving your drop…";
+    const button=pickup.querySelector("button[type=submit]");button.disabled=true;setStatus("Retrieving your drop…");
     try{
       const supplied=document.getElementById("encryption-key")?.value.trim();
       if(supplied){
@@ -120,7 +123,7 @@ if(pickup){
         document.getElementById("message").textContent=content;
         document.getElementById("result").hidden=false;
         document.getElementById("copy").onclick=async()=>{await navigator.clipboard.writeText(content);document.getElementById("copy").textContent="Copied ✓"};
-        feedback.textContent="Message retrieved. This code has been consumed.";
+        setStatus("Message retrieved. This code has been consumed.","success");
       }else{
         let bytes=fromB64(result.base64),name=result.filename||"download";
         if(name===E2EE_FILE){
@@ -131,8 +134,8 @@ if(pickup){
           bytes=plain.slice(2+n);
         }
         saveFile(bytes,name);
-        feedback.textContent="File retrieved. Your download should begin automatically.";
+        setStatus("File retrieved. Your download should begin automatically.","success");
       }
-    }catch(e){feedback.textContent=e.message;}finally{button.disabled=false;}
+    }catch(e){setStatus(e.message,"error");}finally{button.disabled=false;}
   });
 }
