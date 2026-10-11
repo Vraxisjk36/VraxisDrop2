@@ -99,6 +99,16 @@ if(pickup){
     event.preventDefault();
     const button=pickup.querySelector("button[type=submit]");button.disabled=true;feedback.textContent="Retrieving your drop…";
     try{
+      const supplied=document.getElementById("encryption-key")?.value.trim();
+      if(supplied){
+        const keyText=supplied.includes("#key=")?supplied.split("#key=")[1].split("&")[0]:supplied;
+        const key=unb64url(keyText);
+        if(key.length!==32)throw Error("Invalid encryption key. Paste the complete link or 43-character key.");
+        location.hash="key="+b64url(key);
+      }
+      const urlKey=getLinkKey();
+      if(!urlKey&&!document.getElementById("legacy-drop")?.checked)
+        throw Error("Enter the encryption key or open the full pickup link. The code has not been used.");
       const data=new FormData(pickup);data.set("action","pickup");
       const result=await transfer(data);
       const keyBytes=getLinkKey();
