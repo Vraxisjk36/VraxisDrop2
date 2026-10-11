@@ -8,6 +8,20 @@ const encoder = new TextEncoder();
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), {status, headers: {"content-type":"application/json", "access-control-allow-origin":corsOrigin, "vary":"Origin", "cache-control":"no-store"}});
 function code() {const b=crypto.getRandomValues(new Uint8Array(8)); return Array.from(b,x=>alphabet[x%alphabet.length]).join("");}
 async function hash(s:string) {return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",encoder.encode(s)))).map(x=>x.toString(16).padStart(2,"0")).join("");}
+// Opportunistic bounded cleanup; avoids an always-on scheduler on the free tier.
+async function cleanupExpiredDrops() {
+  const {data:expired,error}=await supabase.from("drops")
+    .select("id,storage_path").lt("expires_at",new Date().toISOString()).limit(12);
+  if(error||!expired?.length)return;
+  for(const row of expired){
+    if(row.storage_path){
+      const {error:storageError}=await supabase.storage.from("vraxis-drops").remove([row.storage_path]);
+      if(storageError){console.error("Expired object cleanup failed",storageError);continue}
+    }
+    const {error:deleteError}=await supabase.from("drops").delete().eq("id",row.id).lt("expires_at",new Date().toISOString());
+    if(deleteError)console.error("Expired row cleanup failed",deleteError);
+  }
+}
 Deno.serve(async req => {
   const origin=req.headers.get("origin") || "";
   const headers={"access-control-allow-origin":corsOrigin,"access-control-allow-headers":"content-type","access-control-allow-methods":"POST, OPTIONS","vary":"Origin"};
@@ -29,7 +43,7 @@ Deno.serve(async req => {
     });
     if(rateError){console.error("Quick Drop rate limit failed",rateError);return json({error:"Transfer temporarily unavailable"},503);}
     if(!allowed)return json({error:"Hourly limit reached. Please try again later."},429);
-    if(action==="send") {
+    if(action==="send") {\n      // Cleanup is best-effort and never blocks a new transfer.\n      await cleanupExpiredDrops().catch(e=>console.error("Cleanup failed",e));
       const content=String(form.get("content")||"").trim();
       const file=form.get("file");
       const isFile=file instanceof File && file.size>0;
