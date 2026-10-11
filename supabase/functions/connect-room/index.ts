@@ -15,12 +15,17 @@ Deno.serve(async req=>{
  const raw=await req.text();if(raw.length>26000)return reply({error:"Request too large"},413);const body=JSON.parse(raw);const action=body.action;
  const ip=req.headers.get("cf-connecting-ip")||req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()||"unknown";
  if(["create","join","signal_send","signal_poll","turn_credentials"].includes(action)){
-  const limit=action==="create"?12:action==="join"?24:action==="signal_send"?120:action==="turn_credentials"?8:240;
+  const limit=action==="create"?5:action==="join"?10:action==="signal_send"?120:action==="turn_credentials"?8:240;
   const key=await hash(ip+":"+action);
   const {data:allowed,error:rateError}=await db.rpc("connect_consume_limit",{p_key:key,p_max:limit,p_seconds:60});
   if(rateError)throw rateError;if(!allowed)return reply({error:"Too many requests. Please wait a minute."},429);
  }
  if(action==="create"){
+  const {count:activeRooms,error:roomCountError}=await db.from("connect_rooms")
+    .select("id",{count:"exact",head:true})
+    .is("closed_at",null).gt("expires_at",new Date().toISOString());
+  if(roomCountError)throw roomCountError;
+  if((activeRooms||0)>=100)return reply({error:"Connect is busy. Please try again later."},429);
   const host=secret(),invite=secret(),code=random(8),signalKey=secret();
   // Opportunistic cleanup; room and signal rows remain private to the service role.
   await db.from("connect_signals").delete().lt("created_at",new Date(Date.now()-3600000).toISOString());
