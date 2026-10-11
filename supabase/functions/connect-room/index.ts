@@ -12,9 +12,18 @@ Deno.serve(async req=>{
  if(req.method!=="POST")return reply({error:"Method not allowed"},405);
  const requestOrigin=req.headers.get("origin");if(requestOrigin&&requestOrigin!==origin)return reply({error:"Origin not allowed"},403);
  try{
- const body=await req.json();const action=body.action;
+ const raw=await req.text();if(raw.length>26000)return reply({error:"Request too large"},413);const body=JSON.parse(raw);const action=body.action;
+ const ip=req.headers.get("cf-connecting-ip")||req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()||"unknown";
+ if(["create","join","signal_send","signal_poll"].includes(action)){
+  const limit=action==="create"?12:action==="join"?24:action==="signal_send"?120:240;
+  const key=await hash(ip+":"+action);
+  const {data:allowed,error:rateError}=await db.rpc("connect_consume_limit",{p_key:key,p_max:limit,p_seconds:60});
+  if(rateError)throw rateError;if(!allowed)return reply({error:"Too many requests. Please wait a minute."},429);
+ }
  if(action==="create"){
   const host=secret(),invite=secret(),code=random(8);
+  // Opportunistic cleanup; room and signal rows remain private to the service role.
+  await db.from("connect_signals").delete().lt("created_at",new Date(Date.now()-3600000).toISOString());
   const {data,error}=await db.from("connect_rooms").insert({host_hash:await hash(host),invite_hash:await hash(invite),code_hash:await hash(code)}).select("id,expires_at").single();
   if(error)throw error;return reply({room_id:data.id,host_token:host,invite,code,expires_at:data.expires_at});
  }
@@ -33,7 +42,7 @@ Deno.serve(async req=>{
   const roomId=String(body.room_id||"");const host=String(body.host_token||"");
   const {data:room}=await db.from("connect_rooms").select("id,expires_at,closed_at").eq("id",roomId).eq("host_hash",await hash(host)).maybeSingle();
   if(!room)return reply({error:"Unauthorized room access"},403);
-  if(action==="close"){await db.from("connect_rooms").update({closed_at:new Date().toISOString()}).eq("id",roomId);return reply({status:"closed"})}
+  if(action==="close"){await db.from("connect_rooms").update({closed_at:new Date().toISOString()}).eq("id",roomId);await db.from("connect_signals").delete().eq("room_id",roomId);return reply({status:"closed"})}
   if(room.closed_at||new Date(room.expires_at)<new Date())return reply({status:"expired"});
   if(action==="host_status"){
    const {data:requests}=await db.from("connect_join_requests").select("id,status,created_at").eq("room_id",roomId).order("created_at",{ascending:false}).limit(1);
@@ -56,11 +65,11 @@ Deno.serve(async req=>{
   }
   if(action==="signal_send"){
    const payload=body.payload;
-   if(!payload||typeof payload!=="object"||JSON.stringify(payload).length>20000)return reply({error:"Invalid signal"},400);
+   if(!payload||typeof payload!=="object"||!["offer","answer","ice"].includes(payload.type)||JSON.stringify(payload).length>20000)return reply({error:"Invalid signal"},400);
    const {error}=await db.from("connect_signals").insert({room_id:roomId,sender:role,payload});
    if(error)throw error;return reply({ok:true});
   }
-  const after=Math.max(0,Number(body.after)||0);
+  const after=Math.max(0,Math.floor(Number(body.after)||0));
   const {data,error}=await db.from("connect_signals").select("id,payload").eq("room_id",roomId).neq("sender",role).gt("id",after).order("id",{ascending:true}).limit(100);
   if(error)throw error;return reply({messages:data||[]});
  }
