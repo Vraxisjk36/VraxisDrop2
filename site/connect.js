@@ -1,6 +1,6 @@
 import {createClient} from "https://esm.sh/@supabase/supabase-js@2.57.0";
 const realtimeClient=createClient("https://hvidmmthnragwxcywppt.supabase.co","sb_publishable_2lPMMrHLikazMrhnt7GN8Q_9r8gcwX7",{auth:{persistSession:false,autoRefreshToken:false},realtime:{params:{eventsPerSecond:10}}});
-let signalChannel=null,signalReady=false,guestReadyTick=null,offerSent=false;
+let signalChannel=null,signalReady=false,guestReadyTick=null,offerSent=false,rtcStarting=false;
 
 let receivedFile=null,incomingParts=[],incomingSize=0,activeSend=false,signalBusy=false,hostBusy=false,guestBusy=false,pendingICE=[],transferURLs=[];
 function showConnected(){for(const id of ["host-state","guest-state"]){const el=$(id);if(el&&!el.closest("[hidden]"))renderState(id,"Devices connected ✓","Secure data channel ready. Send text or files below.")}const box=$("live-transfer");box.hidden=false;message("")}
@@ -22,9 +22,18 @@ function openSignaling(){if(signalChannel||!session?.signal_key)return;const top
 signalChannel=realtimeClient.channel(topic,{config:{broadcast:{self:false,ack:true}}});
 signalChannel.on("broadcast",{event:"rtc-signal"},event=>receiveSignal(event.payload));
 signalChannel.subscribe(status=>{signalReady=status==="SUBSCRIBED";if(signalReady&&session?.role==="guest"){sendSignal({type:"ready"}).catch(console.warn);if(!guestReadyTick)guestReadyTick=setInterval(()=>{if(!rtc?.remoteDescription&&signalReady)sendSignal({type:"ready"}).catch(console.warn)},5000)}else if(status==="CHANNEL_ERROR"||status==="TIMED_OUT")message("Realtime connection interrupted. Trying to reconnect…")});}
-function startRTC(){
- if(rtc||!session?.signal_key)return;
- rtc=new RTCPeerConnection({iceServers:[{urls:"stun:stun.l.google.com:19302"}]});
+async function startRTC(){
+ if(rtc||rtcStarting||!session?.signal_key)return;
+ rtcStarting=true;
+ const currentSession=session;
+ let iceServers=[{urls:"stun:stun.l.google.com:19302"}];
+ try{
+   const result=await call("turn_credentials",{role:currentSession.role,room_id:currentSession.room_id,token:currentSession.token});
+   if(Array.isArray(result.iceServers)&&result.iceServers.length)iceServers=result.iceServers;
+ }catch(e){console.warn("TURN unavailable, trying direct connection",e)}
+ if(session!==currentSession){rtcStarting=false;return}
+ try{rtc=new RTCPeerConnection({iceServers})}catch(e){rtcStarting=false;message("Unable to start device connection: "+e.message);return}
+ rtcStarting=false;
  rtc.onicecandidate=e=>{if(e.candidate)sendSignal({type:"ice",candidate:e.candidate.toJSON()}).catch(console.warn)};
  rtc.onconnectionstatechange=()=>{if(rtc.connectionState==="failed"||rtc.connectionState==="disconnected"){message("Connection interrupted. Try keeping both screens awake or using the same Wi-Fi.");$("live-transfer").hidden=true}else if(rtc.connectionState==="connected"&&channel?.readyState==="open")showConnected()};
  rtc.ondatachannel=e=>attachChannel(e.channel);
@@ -46,7 +55,7 @@ const API="https://hvidmmthnragwxcywppt.supabase.co/functions/v1/connect-room";c
 async function call(action,extra={}){const r=await fetch(API,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action,...extra})});const data=await r.json();if(!r.ok)throw Error(data.error||"Connection failed");return data}
 function view(id){["start","host","guest"].forEach(x=>$(x).hidden=x!==id)}
 function message(text){feedback.textContent=text}
-function safeStop(){if(guestReadyTick)clearInterval(guestReadyTick);guestReadyTick=null;if(signalChannel){realtimeClient.removeChannel(signalChannel);signalChannel=null}signalReady=false;offerSent=false;transferURLs.forEach(u=>URL.revokeObjectURL(u));transferURLs=[];pendingICE=[];receivedFile=null;incomingParts=[];if(tick)clearInterval(tick);tick=null;if(signalTick)clearInterval(signalTick);signalTick=null;if(channel)channel.close();if(rtc)rtc.close();channel=null;rtc=null;offerStarted=false;lastSignal=0}
+function safeStop(){if(guestReadyTick)clearInterval(guestReadyTick);guestReadyTick=null;if(signalChannel){realtimeClient.removeChannel(signalChannel);signalChannel=null}signalReady=false;offerSent=false;rtcStarting=false;transferURLs.forEach(u=>URL.revokeObjectURL(u));transferURLs=[];pendingICE=[];receivedFile=null;incomingParts=[];if(tick)clearInterval(tick);tick=null;if(signalTick)clearInterval(signalTick);signalTick=null;if(channel)channel.close();if(rtc)rtc.close();channel=null;rtc=null;offerStarted=false;lastSignal=0}
 function renderState(id,title,detail){$(id).replaceChildren();const h=document.createElement("h3"),p=document.createElement("p");h.textContent=title;p.textContent=detail;$(id).append(h,p)}
 async function hostPoll(){if(!session||session.role!=="host"||hostBusy)return;hostBusy=true;try{const state=await call("host_status",{room_id:session.room_id,host_token:session.token});if(state.status!=="active"){safeStop();renderState("host-state","Room expired","Create a new room to continue.");return}const request=state.request;if(!request){renderState("host-state","Waiting for a device…","Scan the QR or enter the pairing code on another device.");return}if(request.status==="approved"){if(channel?.readyState!=="open")renderState("host-state","Pairing approved ✓","Establishing a secure device connection…");startRTC();return}if(request.status==="denied"){renderState("host-state","Request declined","This device was not admitted.");return}const panel=$("host-state");panel.replaceChildren();const h=document.createElement("h3"),p=document.createElement("p"),row=document.createElement("div");h.textContent="Device wants to join";p.textContent="Only approve if you recognize the device you just invited.";row.className="connect-actions";for(const [label,action] of [["Approve device","approve"],["Decline","deny"]]){const b=document.createElement("button");b.className="btn "+(action==="approve"?"ember":"ghost");b.textContent=label;b.onclick=async()=>{b.disabled=true;try{await call(action,{room_id:session.room_id,host_token:session.token,request_id:request.id});await hostPoll()}catch(e){message(e.message);b.disabled=false}};row.append(b)}panel.append(h,p,row)}catch(e){message(e.message)}finally{hostBusy=false}}
 async function guestPoll(){if(!session||session.role!=="guest"||guestBusy)return;guestBusy=true;try{const r=await call("guest_status",{request_id:session.request_id,guest_token:session.token});const messages={pending:["Waiting for approval…","Approve the request on the device that created the room."],approved:["Pairing approved ✓","Your device has been admitted. Live transfers will be enabled in the next phase."],denied:["Request declined","The room host declined your request."],expired:["Room expired","Create or join a new room."]};if(channel?.readyState!=="open")renderState("guest-state",...(messages[r.status]||messages.expired));if(r.status==="approved"){session.signal_key=r.signal_key;startRTC();}else if(r.status!=="pending")safeStop()}catch(e){message(e.message)}finally{guestBusy=false}}
