@@ -6,3 +6,66 @@
 .nav-wrap .nav-links{display:flex;align-items:center;flex-wrap:nowrap;gap:22px}
 .nav-wrap .nav-links>a{white-space:nowrap}
 @media(max-width:760px){.nav-wrap .nav{height:72px;gap:10px}.nav-wrap .nav-links>a:not(.nav-cta){display:none!important}.nav-wrap .nav-links{gap:0}.nav-wrap .nav-cta{display:inline-flex;font-size:11px;padding:11px 13px;max-width:160px}.nav-wrap .brand{font-size:29px}.panel{background:var(--white);border:1px solid var(--line);border-radius:18px;padding:23px;box-shadow:var(--shadow)}.panel-top{display:flex;align-items:center;justify-content:space-between;gap:12px}.micro,.pill{font-size:10px}.retrieve-wrap .page-title{font-size:clamp(60px,11vw,85px)}}
+
+
+/* V2.4 — editorial polish, accessible interactions and mobile-first transfer desk */
+:root{--shadow:0 24px 70px rgba(48,35,22,.055)}
+body{background:radial-gradient(ellipse 75% 22% at 85% 2%,rgba(232,71,57,.045),transparent 75%),var(--paper)}
+.nav-wrap{backdrop-filter:blur(22px) saturate(130%);-webkit-backdrop-filter:blur(22px) saturate(130%)}
+.nav-cta,.btn{min-height:46px;letter-spacing:.01em}
+.btn.ember{box-shadow:0 6px 20px rgba(232,71,57,.16)}
+.btn.ember:hover{background:#d83d31;box-shadow:0 13px 32px rgba(232,71,57,.24)}
+.btn:active,.nav-cta:active{transform:translateY(1px) scale(.99)}
+.hero h1{max-width:900px;text-wrap:balance}
+.hero .lead{max-width:490px}
+.panel{transition:border-color .22s,box-shadow .22s}
+#send:focus-within,#pickup:focus-within{border-color:#d7c8bc;box-shadow:0 24px 70px rgba(48,35,22,.075)}
+.input,textarea{transition:border-color .18s,box-shadow .18s}
+.input:focus,textarea:focus{box-shadow:0 0 0 4px rgba(232,71,57,.09)}
+#send textarea{min-height:155px}
+.file-zone{position:relative;transition:background .2s,border-color .2s,transform .2s}
+.file-zone:hover{transform:translateY(-1px)}
+.file-zone:focus-within{outline:3px solid rgba(232,71,57,.45);outline-offset:3px}
+.file-zone input{inset:0;width:100%;height:100%;cursor:pointer}
+.expiry span{transition:background .2s,color .2s,border-color .2s}
+#private-mode{accent-color:var(--ember);width:18px;height:18px;flex-shrink:0}
+#pickup .input{font-variant-numeric:tabular-nums}
+#pickup details{border:1px solid var(--line);border-radius:12px;padding:14px;background:#fcfaf7}
+#pickup details summary{cursor:pointer;font-size:12px;font-weight:650}
+#pickup details[open] summary{margin-bottom:14px}
+#pickup .result-panel{animation:rise-in .4s ease both}
+.success-box{animation:rise-in .45s ease both}
+.big-code{font-family:'Geist Mono',monospace;font-size:clamp(28px,5vw,48px);font-weight:500;letter-spacing:.075em}
+#pickup-link{font-size:12px}
+.status:not(:empty){padding:12px 14px;border-radius:11px;background:#fff1ec;border:1px solid #f3d5cd;line-height:1.55}
+.status[data-state="progress"]{color:#695342;background:#f7f1e7;border-color:#e9e0d4}
+.status[data-state="success"]{color:#226a4b;background:#edf7f0;border-color:#cce8d6}
+.status[data-state="error"]{color:#aa362b}
+.transfer-grid .side-card{background:linear-gradient(155deg,#fffefa,#f9f4eb)}
+.step{transition:transform .2s,box-shadow .2s}
+.step:hover{transform:translateY(-3px);box-shadow:0 15px 35px rgba(48,35,22,.05)}
+@keyframes rise-in{from{opacity:.3;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}
+@media(max-width:760px){
+ .nav-wrap .brand{font-size:clamp(23px,6.2vw,29px);letter-spacing:-1px;gap:10px}
+ .nav-wrap .nav-cta{font-size:11px;padding:10px 12px;min-height:44px}
+ .brand-dot{width:13px;height:13px;box-shadow:0 0 0 5px rgba(232,71,57,.08)}
+ .hero{padding:46px 0 35px}
+ .hero h1{font-size:clamp(58px,12vw,82px);margin:21px 0}
+ .hero .lead{font-size:15px;line-height:1.7}
+ .hero-actions .btn{min-height:48px}
+ .hero-art{min-height:190px}
+ .orb{width:170px}
+ .section{padding:52px 0}
+ .section-title{font-size:clamp(45px,11vw,62px)}
+ .panel{padding:22px}
+ .panel-top{margin-bottom:22px}
+ .transfer-grid{gap:14px}
+ #send textarea{font-size:23px;min-height:125px}
+ .file-zone{padding:18px}
+ .retrieve-wrap{padding:42px 0 80px}
+ .retrieve-wrap .page-title{font-size:clamp(55px,11vw,78px);line-height:.96}
+ #pickup .input{font-size:clamp(22px,6vw,30px)!important;letter-spacing:.055em!important}
+ .big-code{font-size:clamp(25px,7vw,39px)}
+}
+@media(max-width:370px){.nav-wrap .nav-cta{font-size:10px;padding:9px 10px}.nav-wrap .brand{font-size:23px}.shell{padding:0 16px}}
+@media(prefers-reduced-motion:reduce){.success-box,#pickup .result-panel{animation:none}.step:hover,.file-zone:hover{transform:none}}
