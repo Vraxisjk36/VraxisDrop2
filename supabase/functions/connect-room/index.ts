@@ -43,6 +43,27 @@ Deno.serve(async req=>{
   const {data,error}=await db.from("connect_join_requests").update({status}).eq("id",String(body.request_id||"")).eq("room_id",roomId).eq("status","pending").select("id").maybeSingle();
   if(error)throw error;if(!data)return reply({error:"Request is no longer pending"},409);return reply({status});
  }
+ if(action==="signal_send"||action==="signal_poll"){
+  const role=body.role==="host"?"host":body.role==="guest"?"guest":null;
+  if(!role)return reply({error:"Invalid role"},400);
+  const roomId=String(body.room_id||""),token=String(body.token||"");
+  const {data:room}=await db.from("connect_rooms").select("id,closed_at,expires_at,host_hash").eq("id",roomId).maybeSingle();
+  if(!room||room.closed_at||new Date(room.expires_at)<new Date())return reply({error:"Room closed or expired"},403);
+  if(role==="host"){if(room.host_hash!==await hash(token))return reply({error:"Unauthorized"},403)}
+  else{
+   const {data:guest}=await db.from("connect_join_requests").select("id").eq("room_id",roomId).eq("guest_hash",await hash(token)).eq("status","approved").maybeSingle();
+   if(!guest)return reply({error:"Device not approved"},403);
+  }
+  if(action==="signal_send"){
+   const payload=body.payload;
+   if(!payload||typeof payload!=="object"||JSON.stringify(payload).length>20000)return reply({error:"Invalid signal"},400);
+   const {error}=await db.from("connect_signals").insert({room_id:roomId,sender:role,payload});
+   if(error)throw error;return reply({ok:true});
+  }
+  const after=Math.max(0,Number(body.after)||0);
+  const {data,error}=await db.from("connect_signals").select("id,payload").eq("room_id",roomId).neq("sender",role).gt("id",after).order("id",{ascending:true}).limit(100);
+  if(error)throw error;return reply({messages:data||[]});
+ }
  if(action==="guest_status"){
   const guest=String(body.guest_token||"");const {data:request}=await db.from("connect_join_requests").select("status,room_id").eq("id",String(body.request_id||"")).eq("guest_hash",await hash(guest)).maybeSingle();
   if(!request)return reply({error:"Unauthorized request"},403);
