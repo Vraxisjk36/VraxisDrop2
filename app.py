@@ -4,10 +4,11 @@ import secrets
 import hashlib
 import time
 from pathlib import Path
-from flask import Flask, request, render_template, redirect, url_for, abort, send_file
+from flask import Flask, request, render_template, url_for, abort, send_file, after_this_request
 from werkzeug.utils import secure_filename
 
 app = Flask(__name__)
+app.config["TESTING"] = os.environ.get("VRAXIS_TESTING") == "1"
 app.config["MAX_CONTENT_LENGTH"] = 10 * 1024 * 1024
 data = Path(os.environ.get("VRAXIS_DATA", "data")).resolve()
 data.mkdir(parents=True, exist_ok=True)
@@ -71,16 +72,20 @@ def pickup():
     if len(code) != 8 or any(c not in alphabet for c in code):
         abort(404, "Invalid or expired code")
     with connect() as db:
-        row = db.execute("SELECT * FROM drops WHERE code_hash=?", (digest(code),)).fetchone()
+        db.execute("BEGIN IMMEDIATE")
+        row = db.execute("SELECT * FROM drops WHERE code_hash=? AND expires>?", (digest(code), int(time.time()))).fetchone()
         if not row:
             abort(404, "Invalid or expired code")
         db.execute("DELETE FROM drops WHERE code_hash=?", (digest(code),))
     if row["kind"] == "text":
         return render_template("result.html", content=row["body"])
     path = Path(row["storage"])
-    response = send_file(path, as_attachment=True, download_name=row["filename"])
-    response.call_on_close(lambda: path.unlink(missing_ok=True))
-    return response
+    @after_this_request
+    def remove_file(response):
+        # File is opened by send_file; cleanup should run after response iteration.
+        response.call_on_close(lambda: path.unlink(missing_ok=True))
+        return response
+    return send_file(path, as_attachment=True, download_name=row["filename"])
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=os.environ.get("FLASK_DEBUG") == "1")
