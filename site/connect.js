@@ -5,9 +5,9 @@ let signalChannel=null,signalReady=false,guestReadyTick=null,offerSent=false,rtc
 let receivedFile=null,incomingParts=[],incomingSize=0,activeSend=false,signalBusy=false,hostBusy=false,guestBusy=false,pendingICE=[],transferURLs=[];
 function showConnected(){for(const id of ["host-state","guest-state"]){const el=$(id);if(el&&!el.closest("[hidden]"))renderState(id,"Devices connected ✓","Secure data channel ready. Send text or files below.")}const box=$("live-transfer");box.hidden=false;message("")}
 function updateTransferProgress(label,percent){const status=document.getElementById("transfer-progress"),bar=document.getElementById("connect-progress-fill");if(status)status.textContent=label;if(bar)bar.style.width=(Number.isFinite(percent)?Math.max(0,Math.min(100,percent)):0)+"%"}
-function logTransfer(kind,value){const row=document.createElement("div");row.className="connect-state";const label=document.createElement("strong"),body=document.createElement("div");label.textContent=kind;body.textContent=value;row.append(label,body);$("transfer-log").prepend(row)}
+function logTransfer(kind,value){const row=document.createElement("div");row.className="connect-state transfer-pop";const label=document.createElement("strong"),body=document.createElement("div");label.textContent=kind;body.textContent=value;row.append(label,body);$("transfer-log").prepend(row)}
 async function onData(event){
- if(typeof event.data!=="string"){if(receivedFile){if(incomingSize+event.data.byteLength>receivedFile.size){receivedFile=null;incomingParts=[];message("Incoming file exceeded its declared size. Transfer rejected.");return}incomingParts.push(event.data);incomingSize+=event.data.byteLength;updateTransferProgress("Receiving "+Math.round(100*incomingSize/receivedFile.size)+"%",100*incomingSize/receivedFile.size);if(incomingSize>=receivedFile.size){const blob=new Blob(incomingParts,{type:receivedFile.type||"application/octet-stream"});const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await blob.arrayBuffer()))).map(v=>v.toString(16).padStart(2,"0")).join("");if(receivedFile.hash&&digest!==receivedFile.hash){receivedFile=null;incomingParts=[];message("File checksum mismatch — download blocked.");return}const a=document.createElement("a");a.href=URL.createObjectURL(blob);transferURLs.push(a.href);a.download=receivedFile.name;a.textContent="Download "+receivedFile.name;a.className="btn ghost";$("transfer-log").prepend(a);setTimeout(()=>URL.revokeObjectURL(a.href),300000);receivedFile=null;incomingParts=[];updateTransferProgress("File received",100)}}return}
+ if(typeof event.data!=="string"){if(receivedFile){if(incomingSize+event.data.byteLength>receivedFile.size){receivedFile=null;incomingParts=[];message("Incoming file exceeded its declared size. Transfer rejected.");return}incomingParts.push(event.data);incomingSize+=event.data.byteLength;updateTransferProgress("Receiving "+Math.round(100*incomingSize/receivedFile.size)+"%",100*incomingSize/receivedFile.size);if(incomingSize>=receivedFile.size){const blob=new Blob(incomingParts,{type:receivedFile.type||"application/octet-stream"});const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await blob.arrayBuffer()))).map(v=>v.toString(16).padStart(2,"0")).join("");if(receivedFile.hash&&digest!==receivedFile.hash){receivedFile=null;incomingParts=[];message("File checksum mismatch — download blocked.");return}const a=document.createElement("a");a.href=URL.createObjectURL(blob);transferURLs.push(a.href);a.download=receivedFile.name;a.textContent="Download "+receivedFile.name;a.className="btn ghost transfer-pop";$("transfer-log").prepend(a);setTimeout(()=>URL.revokeObjectURL(a.href),300000);receivedFile=null;incomingParts=[];updateTransferProgress("File received",100)}}return}
  let data;try{data=JSON.parse(event.data)}catch{return}
  if(data.type==="text")logTransfer("Received text",String(data.value||""));
  if(data.type==="file"){if(!Number.isSafeInteger(data.size)||data.size<0||data.size>50*1024*1024)return;receivedFile={name:String(data.name||"file").slice(0,160).replace(/[\\/]/g,"_"),type:String(data.mime||""),size:data.size,hash:String(data.hash||"")};incomingParts=[];incomingSize=0;updateTransferProgress("Incoming: "+receivedFile.name,0);if(data.size===0){receivedFile=null;updateTransferProgress("Empty file unsupported",0)}}
@@ -43,7 +43,49 @@ async function startRTC(){
 }
 function attachChannel(ch){channel=ch;ch.binaryType="arraybuffer";ch.bufferedAmountLowThreshold=262144;ch.onopen=showConnected;ch.onmessage=e=>{onData(e).catch(err=>message("Receive failed: "+err.message))};ch.onclose=()=>{const box=$("live-transfer");box.hidden=true;message("Device disconnected.")}}
 function sendText(e){e.preventDefault();if(channel?.readyState!=="open")return;const input=$("live-text");if(!input.value.trim())return;channel.send(JSON.stringify({type:"text",value:input.value}));logTransfer("Sent text",input.value);input.value=""}
-async function sendFiles(){if(activeSend||channel?.readyState!=="open")return;activeSend=true;$("send-files").disabled=true;try{for(const file of $("live-files").files){if(!file.size||file.size>50*1024*1024){message("Files must be between 1 byte and 50 MB.");continue}const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",await file.arrayBuffer()))).map(v=>v.toString(16).padStart(2,"0")).join("");channel.send(JSON.stringify({type:"file",name:file.name,size:file.size,mime:file.type,hash:digest}));for(let offset=0;offset<file.size;offset+=16384){while(channel.bufferedAmount>1024*1024){if(channel.readyState!=="open")throw Error("Connection closed during transfer");await new Promise(resolve=>setTimeout(resolve,60))}if(channel.readyState!=="open")throw Error("Connection closed during transfer");channel.send(await file.slice(offset,offset+16384).arrayBuffer());updateTransferProgress("Sending "+file.name+" "+Math.round(100*Math.min(offset+16384,file.size)/file.size)+"%",100*Math.min(offset+16384,file.size)/file.size)}logTransfer("Sent file",file.name)}$("live-files").value="";updateTransferProgress("Ready",0)}catch(e){message("Transfer interrupted: "+e.message)}finally{activeSend=false;$("send-files").disabled=false}}
+async function sendFiles(){
+ if(activeSend||channel?.readyState!=="open")return;
+ activeSend=true;$("send-files").disabled=true;
+ try{
+  for(const file of $("live-files").files){
+   if(!file.size||file.size>50*1024*1024){message("Files must be between 1 byte and 50 MB.");continue}
+   const started=performance.now();
+   updateTransferProgress("Preparing "+file.name+"…",0);
+   const bytes=await file.arrayBuffer();
+   const digest=Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",bytes))).map(v=>v.toString(16).padStart(2,"0")).join("");
+   if(channel?.readyState!=="open")throw Error("Connection closed during transfer");
+   channel.send(JSON.stringify({type:"file",name:file.name,size:file.size,mime:file.type,hash:digest}));
+   const view=new Uint8Array(bytes),chunkSize=16384,highWater=2*1024*1024;
+   for(let offset=0;offset<view.length;offset+=chunkSize){
+    if(channel.readyState!=="open")throw Error("Connection closed during transfer");
+    if(channel.bufferedAmount>highWater){
+     await new Promise((resolve,reject)=>{
+      const timer=setTimeout(()=>{channel.removeEventListener("bufferedamountlow",onLow);resolve()},150);
+      function onLow(){clearTimeout(timer);channel.removeEventListener("bufferedamountlow",onLow);resolve()}
+      channel.addEventListener("bufferedamountlow",onLow);
+     });
+     if(channel.readyState!=="open")throw Error("Connection closed during transfer");
+    }
+    channel.send(view.slice(offset,Math.min(offset+chunkSize,view.length)).buffer);
+    if(offset%(chunkSize*32)===0||offset+chunkSize>=view.length){
+     const percent=100*Math.min(offset+chunkSize,view.length)/view.length;
+     updateTransferProgress("Sending "+file.name+" "+Math.round(percent)+"%",percent);
+     await new Promise(resolve=>setTimeout(resolve,0));
+    }
+   }
+   // Wait for browser send buffer to drain; completion on receiver is verified independently.
+   while(channel.bufferedAmount>0){
+    if(channel.readyState!=="open")throw Error("Connection closed before the file was sent");
+    await new Promise(resolve=>setTimeout(resolve,40));
+   }
+   const elapsed=Math.max(.001,(performance.now()-started)/1000);
+   logTransfer("Sent file",file.name+" · "+(file.size/1048576).toFixed(2)+" MB · "+elapsed.toFixed(1)+"s");
+   updateTransferProgress("Sent "+file.name,100);
+  }
+  $("live-files").value="";
+ }catch(e){message("Transfer interrupted: "+e.message)}
+ finally{activeSend=false;$("send-files").disabled=false}
+}
 
 async function renderQR(link){
  const target=document.getElementById("qr");target.textContent="Generating QR…";
