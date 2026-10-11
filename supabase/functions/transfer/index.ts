@@ -43,7 +43,9 @@ Deno.serve(async req => {
     });
     if(rateError){console.error("Quick Drop rate limit failed",rateError);return json({error:"Transfer temporarily unavailable"},503);}
     if(!allowed)return json({error:"Hourly limit reached. Please try again later."},429);
-    if(action==="send") {\n      // Cleanup is best-effort and never blocks a new transfer.\n      await cleanupExpiredDrops().catch(e=>console.error("Cleanup failed",e));
+    if(action==="send") {
+      // Cleanup is best-effort and never blocks a new transfer.
+      await cleanupExpiredDrops().catch(e=>console.error("Cleanup failed",e));
       const content=String(form.get("content")||"").trim();
       const file=form.get("file");
       const isFile=file instanceof File && file.size>0;
