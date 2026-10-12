@@ -47,3 +47,9 @@ Keep `site/plans.html` labeled **not for sale** until all above items pass. Neve
 - Stores `data.attributes.updated_at` as `provider_occurred_at` on verified webhook events when it is a parseable timestamp; otherwise null.
 - This timestamp represents the provider object's last update, not necessarily webhook emission time. It is not sufficient on its own to prevent out-of-order updates.
 - Still needed: atomic state-transition ordering checks, reliable event ID deduplication, sandbox tests, and subscription/refund reconciliation.
+
+## Consolidated billing groundwork (webhook v8)
+- `billing_apply_provider_state` SQL RPC atomically applies subscription/refund state changes only when `attributes.updated_at` is newer than the stored provider timestamp; refuses normal reactivation of refunded or expired records. RPC is restricted to service role.
+- Webhook v8 invokes the RPC for recognized lifecycle events. Events lacking parseable provider update times are recorded but not applied. Ordering and lifecycle semantics require actual provider payload testing.
+- Private RLS-protected `billing_transfer_usage` table created for future server-side accounting. **It does not enforce quotas yet**; transfer functions are not wired to it.
+- Remaining blockers: signed-in checkout identity binding, automatic purchase linking, handling events arriving before initial order, webhook replay/reconciliation, robust subscription/refund tests, actual paid storage and server-side quota enforcement, and launch-ready paid UX.
