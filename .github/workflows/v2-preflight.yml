@@ -27,7 +27,7 @@ jobs:
           from html.parser import HTMLParser
           from urllib.parse import urlsplit, unquote
           root = Path("site")
-          required = ["index.html","retrieve.html","connect.html","plans.html","account.html","privacy.html","terms.html"]
+          required = ["index.html","retrieve.html","connect.html","plans.html","account.html","collect.html","privacy.html","terms.html"]
           missing = [p for p in required if not (root/p).is_file()]
           if missing: raise SystemExit("Missing required pages: " + ", ".join(missing))
           class Links(HTMLParser):
