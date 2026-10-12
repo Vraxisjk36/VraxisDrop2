@@ -33,3 +33,8 @@ Keep `site/plans.html` labeled **not for sale** until all above items pass. Neve
 - `lemon-webhook` v4 handles subscription updated/cancelled/expired/resumed/paused/unpaused/payment-failed/payment-success events, updating existing subscription rows. No premium activation occurs.
 - **Not production complete:** verify Lemon Squeezy event payload shapes and delivery order, handle out-of-order webhooks, reconcile missing subscriptions, implement refunds and chargebacks, link checkout custom user IDs securely, and test account email redirects.
 - `site/account.html` currently provides optional email magic-link sign-in and a manual purchase lookup; free transfers stay accountless.
+
+## Refund groundwork (webhook v5)
+- Signed `order_refunded` events and `order_updated` events with refunded status mark matching order entitlements `refunded`.
+- This is a preliminary implementation; confirm actual Lemon Squeezy event naming and refund payload shapes in sandbox testing.
+- Important: webhook events currently lack durable event-order reconciliation; older updates can overwrite newer status. Resolve before enabling purchases.
