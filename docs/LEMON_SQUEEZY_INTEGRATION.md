@@ -20,3 +20,11 @@
 
 ## Production rollout gate
 Keep `site/plans.html` labeled **not for sale** until all above items pass. Never accept live payment for functionality that cannot yet be delivered. V1 repository `Vraxisjk36/vraxis-` must remain untouched.
+
+## Implementation progress (2026-10-12)
+- Private RLS-protected billing events, entitlements, and account-links tables created.
+- `lemon-webhook` v3 stores signature-verified events and records matching order/subscription creations as `pending_identity` (not active).
+- `billing-claim` v1 requires a verified Supabase Auth email and links matching pending purchases to the authenticated user as `pending_activation`; it does not grant premium features.
+- `billing-status` v1 requires authentication and reports premium access disabled.
+- Website sign-in and checkout activation, webhook renewal/refund/cancellation state machine, paid upload/storage limits, and end-to-end testing remain outstanding.
+- Do not turn on live purchase CTAs until these are finished.
