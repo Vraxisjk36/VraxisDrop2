@@ -20,9 +20,9 @@ async function refreshPlan() {
     if (!res.ok) throw new Error("Plan status unavailable");
     const data = await res.json();
     const heading = document.createElement("strong");
-    heading.textContent = data.plan === "plus" ? "Vraxis Plus (recorded)" : data.plan === "drop_pass" ? "Drop Pass (recorded)" : "Free";
+    heading.textContent = data.plan === "plus" ? "Vraxis Plus (recorded)" : data.plan === "drop_pass" ? "Drop Pass (recorded)" : data.pending_purchases ? "Purchase pending activation" : "Free";
     const note = document.createElement("p");
-    note.textContent = "Paid transfer features are not live yet. No upgrades are available for purchase.";
+    note.textContent = data.pending_purchases ? data.pending_purchases + " linked purchase(s) awaiting activation. Paid transfers are not live yet." : "Paid transfer features are not live yet. No upgrades are available for purchase.";
     $("plan-summary").replaceChildren(heading, note);
   } catch { status("Signed in, but we couldn't load your plan. Try refreshing.", true); }
 }
