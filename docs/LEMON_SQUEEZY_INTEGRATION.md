@@ -28,3 +28,8 @@ Keep `site/plans.html` labeled **not for sale** until all above items pass. Neve
 - `billing-status` v1 requires authentication and reports premium access disabled.
 - Website sign-in and checkout activation, webhook renewal/refund/cancellation state machine, paid upload/storage limits, and end-to-end testing remain outstanding.
 - Do not turn on live purchase CTAs until these are finished.
+
+## Subscription lifecycle groundwork
+- `lemon-webhook` v4 handles subscription updated/cancelled/expired/resumed/paused/unpaused/payment-failed/payment-success events, updating existing subscription rows. No premium activation occurs.
+- **Not production complete:** verify Lemon Squeezy event payload shapes and delivery order, handle out-of-order webhooks, reconcile missing subscriptions, implement refunds and chargebacks, link checkout custom user IDs securely, and test account email redirects.
+- `site/account.html` currently provides optional email magic-link sign-in and a manual purchase lookup; free transfers stay accountless.
