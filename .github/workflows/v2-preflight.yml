@@ -49,3 +49,17 @@ jobs:
           if bad: raise SystemExit("Broken local references:\n" + "\n".join(bad))
           print("Static pages and local references checked")
           PY
+      - name: Enforce free-beta payment safety
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          plans=Path("site/plans.html").read_text()
+          assert "Not for sale" in plans, "Paid tiers must remain explicitly unavailable"
+          assert "checkout/buy/" not in plans, "Checkout must not be linked on free-beta plans"
+          for file in Path("site").rglob("*"):
+              if file.is_file() and file.suffix in (".js",".html",".json"):
+                  text=file.read_text(encoding="utf-8",errors="replace")
+                  for marker in ("SUPABASE_SERVICE_ROLE_KEY", "LEMON_SQUEEZY_API_KEY", "LEMON_SQUEEZY_WEBHOOK_SECRET"):
+                      assert marker not in text, f"Possible server secret reference in {file}"
+          print("Free beta checkout and public secret guard passed")
+          PY
