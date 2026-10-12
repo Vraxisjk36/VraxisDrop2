@@ -23,7 +23,7 @@ async function loadCollections(){
   item.append(element("p",box.submission_count+" files · "+(box.used_bytes/1048576).toFixed(1)+" / 50 MB · expires "+new Date(box.expires_at).toLocaleDateString()+(box.closed_at?" · closed":"")));
   if(!box.closed_at&&new Date(box.expires_at)>new Date()){
    const link=element("p",urlFor(box.public_token));link.className="muted result";item.append(link);
-   const copy=element("button","Copy collection link");copy.type="button";copy.className="btn";copy.onclick=async()=>{try{await navigator.clipboard.writeText(urlFor(box.public_token));status("owner-status","Collection link copied")}catch{status("owner-status","Copy failed. Select the link above.",true)}};item.append(copy);
+   const copy=element("button","Copy collection link");copy.type="button";copy.className="btn";copy.onclick=async()=>{try{await navigator.clipboard.writeText(urlFor(box.public_token));status("owner-status","Collection link copied")}catch{status("owner-status","Copy failed. Select the link above.",true)}};item.append(copy);if(window.QRCode){const qr=element("div");qr.style.margin="12px 0";item.append(qr);new window.QRCode(qr,{text:urlFor(box.public_token),width:144,height:144});}
   }
   const filesBtn=element("button","View submissions");filesBtn.type="button";filesBtn.className="btn";item.append(filesBtn);
   const files=element("div");item.append(files);
