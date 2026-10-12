@@ -1,0 +1,51 @@
+name: V2 site preflight
+on:
+  push:
+    paths:
+      - 'site/**'
+      - '.github/workflows/v2-preflight.yml'
+  pull_request:
+    paths:
+      - 'site/**'
+      - '.github/workflows/v2-preflight.yml'
+  workflow_dispatch:
+jobs:
+  static-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate JavaScript syntax
+        run: |
+          find site -maxdepth 1 -name '*.js' -print0 | while IFS= read -r -d '' file; do node --check "$file"; done
+      - name: Validate local page links and required pages
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from html.parser import HTMLParser
+          from urllib.parse import urlsplit, unquote
+          root = Path("site")
+          required = ["index.html","retrieve.html","connect.html","plans.html","account.html","privacy.html","terms.html"]
+          missing = [p for p in required if not (root/p).is_file()]
+          if missing: raise SystemExit("Missing required pages: " + ", ".join(missing))
+          class Links(HTMLParser):
+              def __init__(self):
+                  super().__init__(); self.links=[]
+              def handle_starttag(self, tag, attrs):
+                  a=dict(attrs)
+                  for field in ("href","src"):
+                      if field in a: self.links.append(a[field])
+          bad=[]
+          for page in root.glob("*.html"):
+              parser=Links();parser.feed(page.read_text(encoding="utf-8"))
+              for link in parser.links:
+                  parsed=urlsplit(link)
+                  if parsed.scheme or parsed.netloc or not parsed.path or parsed.path.startswith(("mailto:","tel:","data:")): continue
+                  target=(page.parent/unquote(parsed.path))
+                  if target.is_dir(): target=target/"index.html"
+                  if not target.is_file(): bad.append(f"{page}: {link}")
+          if bad: raise SystemExit("Broken local references:\n" + "\n".join(bad))
+          print("Static pages and local references checked")
+          PY
