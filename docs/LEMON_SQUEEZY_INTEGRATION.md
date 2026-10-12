@@ -4,14 +4,14 @@
 - Drop Pass: `5028ee49-7083-4d86-97c1-423f789ed2a3` — one-time, intended 7 days
 - Plus: `eafd79a8-85d8-4082-8981-b38cf0feece1` — recurring
 - Store: `vraxisweb`
-- **Variant IDs provided by owner (mapping assumed from message order; confirm before activating payments):** Drop Pass `2236353`, Plus `2236361`.
+- **Variant IDs confirmed by owner:** Drop Pass `2236353`, Plus `2236361`.
 
 **Do not enable live checkout buttons yet.** Both Lemon Squeezy products are live but Vraxis Drop does not grant paid entitlements. Do not expose the Lemon Squeezy API key or webhook signing secret in GitHub Pages.
 
 ## Required before enabling checkout
 1. Choose account identity and recovery (verified email / magic link). Never trust a customer email passed directly from the browser as proof of payment.
 2. Configure Lemon Squeezy webhook destination in Supabase Edge Functions; set a **webhook signing secret** in Supabase secrets. Verify `X-Signature` against the exact raw request body with HMAC-SHA256 before processing. Reject requests if the secret is absent.
-3. Map Lemon Squeezy **variant IDs** (not checkout URLs) to `drop_pass` and `plus`. Owner supplied candidate variant IDs `2236353` and `2236361`; confirm their mapping in the Lemon Squeezy dashboard before using them in production. Do not rely on product names or prices as identifiers.
+3. Map Lemon Squeezy **variant IDs** (not checkout URLs) to `drop_pass` and `plus`. Confirmed mapping: `2236353` → `drop_pass`, `2236361` → `plus`. Do not rely on product names or prices as identifiers.
 4. Persist webhook event IDs/order IDs/subscription IDs for idempotency. Handle `order_created`, `order_refunded`, `subscription_created`, `subscription_updated`, `subscription_cancelled`, `subscription_expired`, `subscription_payment_failed` and renewal events according to documented semantics. Do not prematurely revoke prepaid subscription access on cancellation.
 5. Store entitlements server-side, keyed to verified identity, with start/end timestamps. Drop Pass should expire seven days after confirmed payment. Reconcile events arriving out of order.
 6. Enforce entitlements, Quick Drop per-file and monthly/7-day quotas **in the backend**, not just the UI. Current 10 MB server limit and one-file schema need redesign. Check Supabase upload size restrictions and large-file architecture before offering 100/500 MB.
