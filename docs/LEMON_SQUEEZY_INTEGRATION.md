@@ -42,3 +42,8 @@ Keep `site/plans.html` labeled **not for sale** until all above items pass. Neve
 ## Webhook v6 note
 - Receiver v6 writes `provider_occurred_at: null` to the events table as a compatibility step.
 - Provider timestamp parsing and out-of-order state reconciliation are still not implemented. Do not enable paid checkout based on this change.
+
+## Webhook v7
+- Stores `data.attributes.updated_at` as `provider_occurred_at` on verified webhook events when it is a parseable timestamp; otherwise null.
+- This timestamp represents the provider object's last update, not necessarily webhook emission time. It is not sufficient on its own to prevent out-of-order updates.
+- Still needed: atomic state-transition ordering checks, reliable event ID deduplication, sandbox tests, and subscription/refund reconciliation.
