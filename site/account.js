@@ -36,6 +36,26 @@ $("login-form").addEventListener("submit", async event => {
   button.disabled = false;
   status(error ? "Could not send the link: " + error.message : "Check your email for your secure sign-in link.", !!error);
 });
+$("claim-button").addEventListener("click", async () => {
+  const button = $("claim-button");
+  button.disabled = true;
+  status("Looking for purchases associated with your verified email…");
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error("Please sign in again.");
+    const res = await fetch(url + "/functions/v1/billing-claim", {
+      method: "POST",
+      headers: { authorization: "Bearer " + session.access_token, apikey: key, "content-type": "application/json" },
+      body: "{}"
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Purchase lookup unavailable.");
+    status(data.linked ? data.linked + " purchase(s) linked to your account. Premium transfers are not enabled yet." : "No unlinked purchases found for this verified email.");
+    await refreshPlan();
+  } catch (error) {
+    status(error instanceof Error ? error.message : "Could not check purchases.", true);
+  } finally { button.disabled = false; }
+});
 $("refresh-button").addEventListener("click", () => { status(""); refreshPlan(); });
 $("logout-button").addEventListener("click", async () => { const { error } = await supabase.auth.signOut(); status(error ? error.message : "You are signed out.", !!error); await showAccount(); });
 supabase.auth.onAuthStateChange(() => { setTimeout(showAccount, 0); });
